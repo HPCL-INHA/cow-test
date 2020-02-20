@@ -1,63 +1,59 @@
-#include <cstdio>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
-
-#include <sched.h>
+#include <iostream>
 #include <unistd.h>
 
-#define BUF_SIZE 1048576 // 1 MB
-#define INIT_VAL 0
-#define CHG_VAL 1
-#define ALT_VAL 2
+using namespace std;
 
-char bss_seg[BUF_SIZE];
-char bss_seg_changing[BUF_SIZE];
-char data_seg[BUF_SIZE] = {
-    INIT_VAL,
-};
-char data_seg_changing[BUF_SIZE] = {
-    INIT_VAL,
-};
+int main(){
+	int pid;
 
-int main(int argc, char *argv[])
-{
-    char stack_seg[BUF_SIZE];
-    char stack_seg_changing[BUF_SIZE];
-    char *heap_seg = (char *)malloc(BUF_SIZE);
-    char *heap_seg_changing = (char *)malloc(BUF_SIZE);
-    char *heap_seg_calloc = (char *)calloc(INIT_VAL, BUF_SIZE);
-    char *heap_seg_calloc_changing = (char *)calloc(INIT_VAL, BUF_SIZE);
+	unsigned char *buf = (unsigned char *)malloc(4194304);
+	for(int i = 0; i < 4194304; i++)
+		buf[i] = rand() % 256;
+	unsigned char *buf2 = (unsigned char *)malloc(4194304);
+	unsigned char *buf3 = (unsigned char *)malloc(4194304);
 
-    memset(bss_seg_changing, CHG_VAL, BUF_SIZE);
-    memset(data_seg_changing, CHG_VAL, BUF_SIZE);
-    memset(stack_seg_changing, CHG_VAL, BUF_SIZE);
-    memset(heap_seg_changing, CHG_VAL, BUF_SIZE);
-    memset(heap_seg_calloc_changing, CHG_VAL, BUF_SIZE);
+	// 2-copy Test
+	std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
+	memcpy(buf2, buf, 4194304);
+	memcpy(buf3, buf2, 4194304);
+	std::chrono::duration<double> sec = std::chrono::system_clock::now() - start;
+	cout << "2-copy Test: " << sec.count() << "s" << endl;
 
-    int pid = fork();
-    if (pid) // 부모 프로세스
-    {
-        cpu_set_t cpu_using;
-        CPU_ZERO(&cpu_using);
-        CPU_SET(0, &cpu_using);
-        sched_setaffinity(getpid(), sizeof(cpu_using), &cpu_using);
+	unsigned char *buf4 = (unsigned char *)malloc(4194304);
+	memcpy(buf4, buf3, 4194304);
 
-        // prevent context switching(global critical section)
-        // clock1 = current clock cycle counter
-        memset(bss_seg, ALT_VAL, BUF_SIZE);
-        // clock2 = current clock cycle counter
-        // release from global critical section
-        // printing out (clock2 - clock1)
-    }
-    else // 자식 프로세스
-    {
-        cpu_set_t cpu_using;
-        CPU_ZERO(&cpu_using);
-        CPU_SET(1, &cpu_using);
-        sched_setaffinity(getpid(), sizeof(cpu_using), &cpu_using);
+	// 2-copy Write Test
+	start = std::chrono::system_clock::now();
+	memset(buf3, 'a', 4194304);
+	sec = std::chrono::system_clock::now() - start;
+	cout << "2-copy Write Test: " << sec.count() << "s" << endl;
 
+buf3[4194303] = 0;
+fprintf(stderr, "%s", (char*)buf3);
 
-    }
+	// CoW Test
+	start = std::chrono::system_clock::now();
+	if(pid = fork()) // 부모
+	{
+		exit(0);	
+	}
+	else // 자식
+	{
+			
+	}
+	sec = std::chrono::system_clock::now() - start;
+	cout << "CoW Test: " << sec.count() << "s" << endl;
 
-    return 0;
+	// CoW Write Test
+	start = std::chrono::system_clock::now();
+	memset(buf4, 'a', 4194304);
+	sec = std::chrono::system_clock::now() - start;
+	cout << "CoW Write Test: " << sec.count() << "s" << endl;
+buf3[4194303] = 0;
+fprintf(stderr, "%s", (char*)buf4);
+
+	return 0;
 }
